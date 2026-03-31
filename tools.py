@@ -48,7 +48,6 @@ def welcome():
 ║{center_text(subtitle, content_width)}║
 {separator}
 {empty_line}
-║{center_text(github, content_width)}║
 ║{center_text(star, content_width)}║
 {empty_line}
 ║{center_text(prompt, content_width)}║
