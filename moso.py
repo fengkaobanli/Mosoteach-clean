@@ -156,6 +156,7 @@ class Clazzcourse:
         self.OtherUrls = []
         self.VideUrls = []
         self.AudioUrls = []
+        self.ZipUrls = []
         self._print_lock = threading.Lock()
         # 统计信息
         self.stats = {
@@ -163,6 +164,7 @@ class Clazzcourse:
             'audio': {'completed': 0, 'pending': 0},
             'pdf': {'completed': 0, 'pending': 0},
             'ppt': {'completed': 0, 'pending': 0},
+            'zip': {'completed': 0, 'pending': 0},
             'other': {'completed': 0, 'pending': 0}
         }
 
@@ -356,6 +358,22 @@ class Clazzcourse:
                             file_type = 'pdf'
                         elif mime_type in ['application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'] or (title and (title.lower().endswith('.ppt') or title.lower().endswith('.pptx'))):
                             file_type = 'ppt'
+                        elif (title and (title.lower().endswith('.zip') or title.lower().endswith('.rar'))) or resource.get('extName') in ['.zip', '.rar']:
+                            file_type = 'zip'
+                            # 压缩包文件，添加到ZipUrls
+                            info_zip = {}
+                            info_zip['url'] = url
+                            info_zip['clazz_course_id'] = clazz_course_id
+                            info_zip['res_id'] = data_value
+                            info_zip['title'] = title
+                            info_zip['viewFlag'] = view_flag
+                            self.ZipUrls.append(info_zip)
+                            # 统计
+                            if is_completed:
+                                self.stats['zip']['completed'] += 1
+                            else:
+                                self.stats['zip']['pending'] += 1
+                            continue
                         
                         info_other = {}
                         info_other['url'] = url
@@ -598,6 +616,63 @@ class Clazzcourse:
                 print(f'音频刷课失败: {e}, 正在尝试使用其他文件刷课方式...')
             self.otherfile(info)
 
+    def zipfile(self, info):
+        try:
+            timestamp = int(time.time() * 1000)
+            clazz_course_id = info['clazz_course_id']
+            res_id = info['res_id']
+            name = info['title']
+            
+            # 检查资源状态
+            view_flag = info.get('viewFlag', 'N')
+            if view_flag == 'Y':
+                return
+            
+            # 构建正确的压缩包资源访问URL
+            url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources/{res_id}/download?_ts={timestamp}'
+            
+            # 构建请求头
+            headers = {
+                'accept': '*/*',
+                'accept-encoding': 'gzip, deflate, br, zstd',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,zh-TW;q=0.5,ja;q=0.4',
+                'cache-control': 'no-cache',
+                'origin': 'https://www.mosoteach.cn',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'referer': 'https://www.mosoteach.cn/',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0',
+                'x-client-app-id': 'MTWEB',
+                'x-client-version': '6.0.0',
+                'x-security-type': 'SECURITY_TYPE_TOKEN'
+            }
+            
+            # 添加token到请求头
+            if self.__token:
+                headers['x-token'] = self.__token
+            
+            # 使用session发送请求
+            session = requests.Session()
+            if self.__cookies:
+                session.cookies.update(self.__cookies)
+            
+            # 执行刷课操作
+            response = session.get(url, headers=headers, timeout=5)
+            # 精简输出，带分类标识
+            if response.status_code == 200:
+                with self._print_lock:
+                    print(f'[压缩包] 刷课成功: {name}')
+            else:
+                with self._print_lock:
+                    print(f'[压缩包] 刷课失败: {name}, 状态码: {response.status_code}')
+        except Exception as e:
+            with self._print_lock:
+                print(f'[压缩包] 刷课失败: {e}, 正在尝试使用其他文件刷课方式...')
+            self.otherfile(info)
+
     def get_resource_groups(self, clazz_course_id):
         '''获取班课资源组'''        
         timestamp = int(time.time() * 1000)
@@ -661,11 +736,12 @@ class Clazzcourse:
         # 输出统计信息
         print('\n' + '='*50)
         print('资源统计：')
-        print(f'  [视频] 已完成: {self.stats["video"]["completed"]} | 未完成: {self.stats["video"]["pending"]}')
-        print(f'  [音频] 已完成: {self.stats["audio"]["completed"]} | 未完成: {self.stats["audio"]["pending"]}')
-        print(f'  [PDF]  已完成: {self.stats["pdf"]["completed"]} | 未完成: {self.stats["pdf"]["pending"]}')
-        print(f'  [PPT]  已完成: {self.stats["ppt"]["completed"]} | 未完成: {self.stats["ppt"]["pending"]}')
-        print(f'  [其他] 已完成: {self.stats["other"]["completed"]} | 未完成: {self.stats["other"]["pending"]}')
+        print(f'  [视频]    已完成: {self.stats["video"]["completed"]} | 未完成: {self.stats["video"]["pending"]}')
+        print(f'  [音频]    已完成: {self.stats["audio"]["completed"]} | 未完成: {self.stats["audio"]["pending"]}')
+        print(f'  [PDF]     已完成: {self.stats["pdf"]["completed"]} | 未完成: {self.stats["pdf"]["pending"]}')
+        print(f'  [PPT]     已完成: {self.stats["ppt"]["completed"]} | 未完成: {self.stats["ppt"]["pending"]}')
+        print(f'  [压缩包]  已完成: {self.stats["zip"]["completed"]} | 未完成: {self.stats["zip"]["pending"]}')
+        print(f'  [其他]    已完成: {self.stats["other"]["completed"]} | 未完成: {self.stats["other"]["pending"]}')
         print('='*50 + '\n')
         
         # 使用线程池处理视频
@@ -680,7 +756,12 @@ class Clazzcourse:
         executor_audio = ThreadPoolExecutor(max_workers=8)
         list(executor_audio.map(self.audiofile, self.AudioUrls))
         
+        # 使用线程池处理压缩包文件
+        executor_zip = ThreadPoolExecutor(max_workers=8)
+        list(executor_zip.map(self.zipfile, self.ZipUrls))
+        
         # 清空资源列表
         self.VideUrls = []
         self.OtherUrls = []
         self.AudioUrls = []
+        self.ZipUrls = []
