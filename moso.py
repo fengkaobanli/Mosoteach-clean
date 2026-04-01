@@ -24,50 +24,16 @@ class Loginer:
             'Content-Type': 'application/json;charset=utf-8',
             'X-client-app-id': 'MTWEB',
             'X-client-version': '6.0.0',
-            'X-security-type': 'SECURITY_TYPE_TOKEN'
+            'X-security-type': 'SECURITY_TYPE_TOKEN',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0'
         }
         data = {
             'account': self.__username,
             'password': self.__password
         }
         try:
-            # 使用session来保存cookie
+            # 直接进行API登录，无需获取多余cookie
             session = requests.Session()
-            # 设置完整的请求头
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,zh-TW;q=0.5,ja;q=0.4',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-            })
-            
-            # 1. 访问主页获取初始cookie
-            try:
-                main_url = 'https://www.mosoteach.cn'
-                session.get(main_url, timeout=5)
-                print('成功获取初始cookie')
-            except Exception as e:
-                print(f'获取初始cookie失败: {e}')
-            
-            # 2. 访问web页面
-            try:
-                web_url = 'https://www.mosoteach.cn/web/index.php'
-                session.get(web_url, timeout=5)
-                print('成功获取web cookie')
-            except Exception as e:
-                print(f'获取web cookie失败: {e}')
-            
-            # 3. 访问passport页面
-            try:
-                passport_url = 'https://www.mosoteach.cn/web/index.php?c=passport&m=index'
-                session.get(passport_url, timeout=5)
-                print('成功获取passport cookie')
-            except Exception as e:
-                print(f'获取passport cookie失败: {e}')
-            
-            # 4. 进行API登录
             self.login_status = session.post(self.__base_url + self.__login_url, json=data, headers=headers, timeout=5)
             
             # 提取token
@@ -75,11 +41,9 @@ class Loginer:
                 json_response = self.login_status.json()
                 if json_response.get('status'):
                     self.token = json_response.get('token')
-                    # 保存session的cookie
+                    # 保存session
                     self.__session = session
-                    
-
-                    
+            
             return self.login_status
         except Exception as e:
             print(e)
