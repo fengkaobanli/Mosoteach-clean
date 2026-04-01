@@ -85,7 +85,7 @@ class Loginer:
                     username = user_info.get('fullName', user_info.get('full_name', '未知用户'))
                     school = user_info.get('school')
                     if school:
-                        school_name = school.get('name', '未知学校')
+                        school_name = school.get('name', '宝子好神秘，没有学校名称呢')
                     else:
                         school_name = user_info.get('schoolName', user_info.get('school_name', '未知学校'))
                     print('%s的%s,你好,欢迎使用!' % (school_name, username))
@@ -197,17 +197,7 @@ class Clazzcourse:
             return json_response
         except Exception as e:
             print(f'请求失败: {e}')
-            # 如果请求失败，返回示例数据
-            return {
-                'data': [
-                    {
-                        'id': '35D295DE-1CF4-11F1-BAE9-A088C2A30E68',
-                        'course': {'name': '计算机辅助绘图'},
-                        'clazz': {'name': 'F25C072工机'},
-                        'creater': {'fullName': '黄思敏', 'full_name': '黄思敏'}
-                    }
-                ]
-            }
+            return None
 
     def res_list(self, choice):
         print('正在采集当前班课信息:%s' % choice[0])
