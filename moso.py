@@ -345,46 +345,6 @@ class Clazzcourse:
                     continue
         except Exception as e:
             print(f'获取班课资源失败: {e}')
-            # 如果API请求失败，尝试使用旧的方法
-            print('尝试使用旧的方法获取班课资源...')
-            old_url = f'https://www.mosoteach.cn/web/index.php?c=res&m=index&clazz_course_id={clazz_course_id}'
-            if self.__token:
-                old_response = requests.get(old_url, headers=self.headers)
-            else:
-                old_response = requests.get(old_url, cookies=self.__cookies)
-            selector = Selector(old_response.text)
-            divs = selector.xpath('//*[@id="res-list-box"]/div/div[2]/div')
-            for div in divs:
-                try:
-                    mime_type = div.xpath('./@data-mime').get()  # 类型
-                    url = div.xpath('./@data-href').get()  # 文件链接
-                    title = div.xpath('./div[4]/div[1]/span/text()').get()  # 文件标题
-                    data_value = div.xpath('./@data-value').get()  # 文件id
-                    status_file = div.css('.create-box span[data-is-drag]::attr(data-is-drag)').get()  # 文件的状态
-                    if status_file == 'N':
-                        if mime_type == 'video':
-                            info_vides = {}
-                            info_vides['url'] = url
-                            info_vides['clazz_course_id'] = clazz_course_id
-                            info_vides['res_id'] = data_value
-                            info_vides['title'] = title
-                            self.VideUrls.append(info_vides)
-                        elif mime_type == 'audio':
-                            info_audio = {}
-                            info_audio['url'] = url
-                            info_audio['clazz_course_id'] = clazz_course_id
-                            info_audio['res_id'] = data_value
-                            info_audio['title'] = title
-                            self.AudioUrls.append(info_audio)
-                        else:
-                            info_other = {}
-                            info_other['url'] = url
-                            info_other['clazz_course_id'] = clazz_course_id
-                            info_other['res_id'] = data_value
-                            info_other['title'] = title
-                            self.OtherUrls.append(info_other)
-                except:
-                    pass
 
     def video(self, info):
         try:
