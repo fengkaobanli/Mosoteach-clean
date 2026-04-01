@@ -505,7 +505,10 @@ class Clazzcourse:
 
     def audiofile(self, info):
         try:
-            url = "https://www.mosoteach.cn/web/index.php?c=res&m=request_url_for_json"
+            import time
+            timestamp = int(time.time() * 1000)
+            clazz_course_id = info['clazz_course_id']
+            res_id = info['res_id']
             name = info['title']
             
             # 检查资源状态
@@ -514,15 +517,39 @@ class Clazzcourse:
                 print(f'此音频已被用户完成: {name}')
                 return
             
-            data = {
-                "file_id": info['res_id'],
-                "type": "VIEW",
-                "clazz_course_id": info['clazz_course_id']
+            # 构建正确的音频资源访问URL
+            url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources/{res_id}/viewer?_ts={timestamp}'
+            
+            # 构建请求头
+            headers = {
+                'accept': '*/*',
+                'accept-encoding': 'gzip, deflate, br, zstd',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,zh-TW;q=0.5,ja;q=0.4',
+                'cache-control': 'no-cache',
+                'origin': 'https://www.mosoteach.cn',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'referer': 'https://www.mosoteach.cn/',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0',
+                'x-client-app-id': 'MTWEB',
+                'x-client-version': '6.0.0',
+                'x-security-type': 'SECURITY_TYPE_TOKEN'
             }
+            
+            # 添加token到请求头
             if self.__token:
-                response = requests.post(url, headers=self.headers, timeout=3, data=data)
-            else:
-                response = requests.post(url, headers=self.headers, cookies=self.__cookies, timeout=3, data=data)
+                headers['x-token'] = self.__token
+            
+            # 使用session发送请求
+            session = requests.Session()
+            if self.__cookies:
+                session.cookies.update(self.__cookies)
+            
+            # 执行刷课操作
+            response = session.get(url, headers=headers, timeout=5)
             # 精简输出
             if response.status_code == 200:
                 print(f'音频刷课成功: {name}')
