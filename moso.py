@@ -65,23 +65,7 @@ class Loginer:
             except Exception as e:
                 print(f'获取passport cookie失败: {e}')
             
-            # 4. 访问web-old页面
-            try:
-                web_old_url = 'https://www.mosoteach.cn/web-old/index.php'
-                session.get(web_old_url, timeout=5)
-                print('成功获取web-old cookie')
-            except Exception as e:
-                print(f'获取web-old cookie失败: {e}')
-            
-            # 5. 访问班课页面
-            try:
-                clazz_url = 'https://www.mosoteach.cn/web-old/index.php?c=clazzcourse'
-                session.get(clazz_url, timeout=5)
-                print('成功获取班课页面cookie')
-            except Exception as e:
-                print(f'获取班课页面cookie失败: {e}')
-            
-            # 6. 进行API登录
+            # 4. 进行API登录
             self.login_status = session.post(self.__base_url + self.__login_url, json=data, headers=headers, timeout=5)
             
             # 提取token
@@ -92,20 +76,7 @@ class Loginer:
                     # 保存session的cookie
                     self.__session = session
                     
-                    # 7. 再次访问web-old页面
-                    try:
-                        session.get(web_old_url, timeout=5)
-                        print('再次获取web-old cookie')
-                    except Exception as e:
-                        print(f'再次获取web-old cookie失败: {e}')
-                    
-                    # 8. 访问资源页面
-                    try:
-                        res_url = 'https://www.mosoteach.cn/web-old/index.php?c=res&m=index'
-                        session.get(res_url, timeout=5)
-                        print('成功获取资源页面cookie')
-                    except Exception as e:
-                        print(f'获取资源页面cookie失败: {e}')
+
                     
             return self.login_status
         except Exception as e:
