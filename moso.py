@@ -226,6 +226,9 @@ class Clazzcourse:
                         # 如果creater中有fullName字段，添加full_name字段作为兼容
                         if 'fullName' in item['creater'] and 'full_name' not in item['creater']:
                             item['creater']['full_name'] = item['creater']['fullName']
+                    # 处理status字段，确保有默认值
+                    if 'status' not in item:
+                        item['status'] = 'OPEN'
             
             return json_response
         except Exception as e:

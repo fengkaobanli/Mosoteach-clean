@@ -25,31 +25,45 @@ def get_class_id():
         clazz_name = dat['clazz']['name']
         # 处理creater字段不存在和fullName/full_name字段名的问题
         creater_name = dat.get('creater', {}).get('full_name', dat.get('creater', {}).get('fullName', '未知教师'))
-        print(num, course_name, clazz_name, creater_name)
+        # 检查班课状态
+        status = dat.get('status', 'OPEN')
+        if status == 'CLOSED':
+            print(f'{num} [已结束的班课] {course_name} {clazz_name} {creater_name}')
+        else:
+            print(f'{num} {course_name} {clazz_name} {creater_name}')
     choice = input('请选择你需要操作的班课(多个用空格隔开,全选输入all):')
     if choice.upper() == 'ALL':
-        # 自动处理所有班课
+        # 自动处理所有班课，但跳过已结束的班课
         choice_list = []
         for dat in data:
+            # 跳过已结束的班课
+            if dat.get('status', 'OPEN') == 'CLOSED':
+                continue
             course_id = dat['id']
             course_name = dat['course']['name']
             choice_list.append((course_name, course_id))
-        return choice_list
+        # 返回列表，并标记为全选模式
+        return choice_list, True
     elif choice == '':
         print('啥也没选择!')
         sleep(2)
-        return None
+        return None, False
     else:
         choices_result = choice_process(choice)
         if choices_result[-1] > len(data) or choices_result[0] < 0:
             print('看看输入的错误没!')
-            return None
+            return None, False
         choice_list = []
         for i in choices_result:
+            # 跳过已结束的班课
+            if data[i].get('status', 'OPEN') == 'CLOSED':
+                course_name = data[i]['course']['name']
+                print(f'班课 "{course_name}" 已结束，跳过处理')
+                continue
             course_id = data[i]['id']
             course_name = data[i]['course']['name']
             choice_list.append((course_name, course_id))
-        return choice_list
+        return choice_list, False
 
 
 def select_group_and_resource(clazz_course_id, course_name):
@@ -146,19 +160,16 @@ def main():
     # 清屏
     os.system(systemType)
     welcome()
-    choices = get_class_id()
+    result = get_class_id()
+    if result is None:
+        return
+    choices, is_all = result
     if choices:
-        # 检查是否是全选
-        is_all = False
-        if len(choices) == len(course.join_class_list.get('data', [])):
-            is_all = True
-        
         for choice in choices:
             course_name, clazz_course_id = choice
             
             # 如果是全选，自动选择刷整个班课的所有资源
             if is_all:
-                print(f'\n正在处理班课: {course_name}')
                 # 将文件放入列表
                 course.res_list(choice)
             else:
@@ -186,12 +197,36 @@ def main():
         
         # 确保提示不会被刷上去
         print('\n' + '='*50)
-        is_continue = input('是否继续选择?(y)')
+        print('y - 继续在此账号上操作')
+        print('1 - 登录其他账号继续刷课')
+        print('0 或 q - 退出程序')
+        is_continue = input('请输入(y/1/0/q):')
         if is_continue.upper() == "Y":
             main()
+        elif is_continue == "1":
+            # 重新登录其他账号
+            restart_program()
         else:
-            print('你选择了退出!')
+            print('记得给作者一个小star✨')
             sleep(1)
+            exit(0)
+
+
+def restart_program():
+    """重新启动程序，登录其他账号"""
+    global course
+    # 清屏
+    os.system(systemType)
+    welcome()
+    username = input('手机号或邮箱号>>>')
+    password = input('密码>>>')
+    cookies, token = login(username, password)
+    if cookies or token:
+        course = Clazzcourse(cookies=cookies, token=token)
+        main()
+    else:
+        print('乖乖啊,账号或者密码错了!!!')
+        t = input('输入任意键退出>>>')
 
 
 if __name__ == '__main__':
