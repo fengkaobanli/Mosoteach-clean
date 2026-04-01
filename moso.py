@@ -1,6 +1,8 @@
 import requests
 from parsel import Selector
 from concurrent.futures import ThreadPoolExecutor
+import time
+import threading
 
 
 # 登录
@@ -154,6 +156,15 @@ class Clazzcourse:
         self.OtherUrls = []
         self.VideUrls = []
         self.AudioUrls = []
+        self._print_lock = threading.Lock()
+        # 统计信息
+        self.stats = {
+            'video': {'completed': 0, 'pending': 0},
+            'audio': {'completed': 0, 'pending': 0},
+            'pdf': {'completed': 0, 'pending': 0},
+            'ppt': {'completed': 0, 'pending': 0},
+            'other': {'completed': 0, 'pending': 0}
+        }
 
     @property
     def join_class_list(self):
@@ -162,7 +173,6 @@ class Clazzcourse:
             print('请传入一个cookie值或token!!!')
             return None
         # 使用用户提供的API端点获取班课列表
-        import time
         timestamp = int(time.time() * 1000)
         url = f'https://coreapi.mosoteach.cn/ccs/joined?_ts={timestamp}'
         
@@ -232,7 +242,6 @@ class Clazzcourse:
 
     def res_list(self, choice):
         print('正在采集当前班课信息:%s' % choice[0])
-        import time
         timestamp = int(time.time() * 1000)
         clazz_course_id = choice[-1]
         url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources?roleId=2&_ts={timestamp}'
@@ -272,25 +281,20 @@ class Clazzcourse:
             
             # 检查数据结构
             if 'resources' in json_response:
-                print(f'resources字段类型: {type(json_response["resources"])}')
                 if isinstance(json_response['resources'], list):
                     resources = json_response['resources']
                     print(f'资源数量: {len(resources)}')
                 else:
-                    # 尝试获取资源列表的其他可能位置
                     resources = []
                     print('resources字段不是列表')
             elif 'data' in json_response:
-                print(f'data字段类型: {type(json_response["data"])}')
                 if isinstance(json_response['data'], list):
                     resources = json_response['data']
                     print(f'资源数量: {len(resources)}')
                 else:
-                    # 尝试获取资源列表的其他可能位置
                     resources = []
                     print('data字段不是列表')
             else:
-                # 尝试获取资源列表的其他可能位置
                 resources = []
                 print('未找到资源列表字段')
             
@@ -313,6 +317,9 @@ class Clazzcourse:
                     # 获取视频时长
                     duration = resource.get('metaDuration', -1)
                     
+                    # 判断资源类型并统计
+                    is_completed = view_flag == 'Y'
+                    
                     # 添加所有资源，不管状态如何
                     if mime_type and mime_type.startswith('video/'):
                         info_vides = {}
@@ -323,6 +330,11 @@ class Clazzcourse:
                         info_vides['duration'] = duration  # 保存视频时长
                         info_vides['viewFlag'] = view_flag  # 保存资源状态
                         self.VideUrls.append(info_vides)
+                        # 统计
+                        if is_completed:
+                            self.stats['video']['completed'] += 1
+                        else:
+                            self.stats['video']['pending'] += 1
                     elif mime_type and mime_type.startswith('audio/'):
                         info_audio = {}
                         info_audio['url'] = url
@@ -332,14 +344,32 @@ class Clazzcourse:
                         info_audio['duration'] = duration  # 保存音频时长
                         info_audio['viewFlag'] = view_flag  # 保存资源状态
                         self.AudioUrls.append(info_audio)
+                        # 统计
+                        if is_completed:
+                            self.stats['audio']['completed'] += 1
+                        else:
+                            self.stats['audio']['pending'] += 1
                     else:
+                        # 判断其他文件类型
+                        file_type = 'other'
+                        if mime_type == 'application/pdf' or (title and title.lower().endswith('.pdf')):
+                            file_type = 'pdf'
+                        elif mime_type in ['application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'] or (title and (title.lower().endswith('.ppt') or title.lower().endswith('.pptx'))):
+                            file_type = 'ppt'
+                        
                         info_other = {}
                         info_other['url'] = url
                         info_other['clazz_course_id'] = clazz_course_id
                         info_other['res_id'] = data_value
                         info_other['title'] = title
                         info_other['viewFlag'] = view_flag  # 保存资源状态
+                        info_other['file_type'] = file_type  # 保存文件类型
                         self.OtherUrls.append(info_other)
+                        # 统计
+                        if is_completed:
+                            self.stats[file_type]['completed'] += 1
+                        else:
+                            self.stats[file_type]['pending'] += 1
                 except Exception as e:
                     print(f'处理资源失败: {e}')
                     continue
@@ -355,17 +385,16 @@ class Clazzcourse:
             # 检查资源状态
             view_flag = info.get('viewFlag', 'N')
             if view_flag == 'Y':
-                print(f'此视频已被用户完成: {name}')
                 return
             
             # 直接从资源信息中获取时长
             duration = info.get('duration', 100)
             
-            print(f'正在获取视频信息:{name}')
-            print(f'视频时长: {duration}秒')
+            with self._print_lock:
+                print(f'正在获取视频信息:{name}')
+                print(f'视频时长: {duration}秒')
             
             # 进行刷课操作 - 使用coreapi端点
-            import time
             timestamp = int(time.time() * 1000)
             url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources/{res_id}/records?_ts={timestamp}'
             
@@ -396,7 +425,6 @@ class Clazzcourse:
             # 添加token到请求头
             if self.__token:
                 headers['x-token'] = self.__token
-                print('使用token进行认证')
             
             # 构建请求负载
             data = {
@@ -409,7 +437,6 @@ class Clazzcourse:
             session = requests.Session()
             if self.__cookies:
                 session.cookies.update(self.__cookies)
-                print('使用cookie进行认证')
             
             # 执行刷课操作
             response = session.post(url, json=data, headers=headers, timeout=5)
@@ -418,21 +445,27 @@ class Clazzcourse:
                 try:
                     json_response = response.json()
                     if json_response.get('status') == True:
-                        print(f'视频刷课成功: {name}')
+                        with self._print_lock:
+                            print(f'视频刷课成功: {name}')
                     else:
-                        print(f'视频刷课失败: {name}, 响应: {response.text}')
+                        with self._print_lock:
+                            print(f'视频刷课失败: {name}, 响应: {response.text}')
                 except:
-                    print(f'视频刷课成功: {name}')
+                    with self._print_lock:
+                        print(f'视频刷课成功: {name}')
             else:
-                print(f'视频刷课失败: {name}, 状态码: {response.status_code}')
+                with self._print_lock:
+                    print(f'视频刷课失败: {name}, 状态码: {response.status_code}')
 
         except Exception as e:
-            print(f'视频刷课失败: {e}, 正在重试...')
+            with self._print_lock:
+                print(f'视频刷课失败: {e}, 正在重试...')
             # 限制重试次数，避免无限递归
             if hasattr(self, '_retry_count'):
                 self._retry_count += 1
                 if self._retry_count > 3:
-                    print(f'视频刷课多次失败，放弃: {name}')
+                    with self._print_lock:
+                        print(f'视频刷课多次失败，放弃: {name}')
                     delattr(self, '_retry_count')
                     return
             else:
@@ -441,17 +474,17 @@ class Clazzcourse:
 
     def otherfile(self, info):
         try:
-            import time
             timestamp = int(time.time() * 1000)
             clazz_course_id = info['clazz_course_id']
             res_id = info['res_id']
             name = info['title']
+            file_type = info.get('file_type', 'other')
             
             # 检查资源状态
             view_flag = info.get('viewFlag', 'N')
             if view_flag == 'Y':
-                print(f'此文件已被用户完成: {name}')
                 return
+            
             # 构建正确的资源访问URL
             url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources/{res_id}/viewer?_ts={timestamp}'
             
@@ -484,19 +517,24 @@ class Clazzcourse:
             
             # 执行刷课操作
             response = requests.get(url, headers=headers, timeout=5)
-            # 精简输出
+            # 精简输出，带分类标识
+            type_label = {'pdf': '[PDF]', 'ppt': '[PPT]', 'other': '[其他]'}.get(file_type, '[其他]')
             if response.status_code == 200:
-                print(f'其他文件刷课成功: {name}')
+                with self._print_lock:
+                    print(f'{type_label} 刷课成功: {name}')
             else:
-                print(f'其他文件刷课失败: {name}, 状态码: {response.status_code}')
+                with self._print_lock:
+                    print(f'{type_label} 刷课失败: {name}, 状态码: {response.status_code}')
             
         except Exception as e:
-            print(f'其他文件刷课失败: {e}, 正在重试...')
+            with self._print_lock:
+                print(f'其他文件刷课失败: {e}, 正在重试...')
             # 限制重试次数，避免无限递归
             if hasattr(self, '_other_retry_count'):
                 self._other_retry_count += 1
                 if self._other_retry_count > 3:
-                    print(f'其他文件刷课多次失败，放弃: {name}')
+                    with self._print_lock:
+                        print(f'其他文件刷课多次失败，放弃: {name}')
                     delattr(self, '_other_retry_count')
                     return
             else:
@@ -505,7 +543,6 @@ class Clazzcourse:
 
     def audiofile(self, info):
         try:
-            import time
             timestamp = int(time.time() * 1000)
             clazz_course_id = info['clazz_course_id']
             res_id = info['res_id']
@@ -514,7 +551,6 @@ class Clazzcourse:
             # 检查资源状态
             view_flag = info.get('viewFlag', 'N')
             if view_flag == 'Y':
-                print(f'此音频已被用户完成: {name}')
                 return
             
             # 构建正确的音频资源访问URL
@@ -552,16 +588,18 @@ class Clazzcourse:
             response = session.get(url, headers=headers, timeout=5)
             # 精简输出
             if response.status_code == 200:
-                print(f'音频刷课成功: {name}')
+                with self._print_lock:
+                    print(f'音频刷课成功: {name}')
             else:
-                print(f'音频刷课失败: {name}, 状态码: {response.status_code}')
+                with self._print_lock:
+                    print(f'音频刷课失败: {name}, 状态码: {response.status_code}')
         except Exception as e:
-            print(f'音频刷课失败: {e}, 正在尝试使用其他文件刷课方式...')
+            with self._print_lock:
+                print(f'音频刷课失败: {e}, 正在尝试使用其他文件刷课方式...')
             self.otherfile(info)
 
     def get_resource_groups(self, clazz_course_id):
         '''获取班课资源组'''        
-        import time
         timestamp = int(time.time() * 1000)
         url = f'https://coreapi.mosoteach.cn/ccs/{clazz_course_id}/resources?roleId=2&_ts={timestamp}'
         
@@ -620,6 +658,16 @@ class Clazzcourse:
         return {}
 
     def process_file(self):
+        # 输出统计信息
+        print('\n' + '='*50)
+        print('资源统计：')
+        print(f'  [视频] 已完成: {self.stats["video"]["completed"]} | 未完成: {self.stats["video"]["pending"]}')
+        print(f'  [音频] 已完成: {self.stats["audio"]["completed"]} | 未完成: {self.stats["audio"]["pending"]}')
+        print(f'  [PDF]  已完成: {self.stats["pdf"]["completed"]} | 未完成: {self.stats["pdf"]["pending"]}')
+        print(f'  [PPT]  已完成: {self.stats["ppt"]["completed"]} | 未完成: {self.stats["ppt"]["pending"]}')
+        print(f'  [其他] 已完成: {self.stats["other"]["completed"]} | 未完成: {self.stats["other"]["pending"]}')
+        print('='*50 + '\n')
+        
         # 使用线程池处理视频
         executor_video = ThreadPoolExecutor(max_workers=8)
         list(executor_video.map(self.video, self.VideUrls))
