@@ -43,6 +43,9 @@ class QuizExporter:
         text = re.sub(r'<[^>]+>', '', text)
         text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
         text = text.replace('&lt;', '<').replace('&gt;', '>')
+        text = text.replace('&ldquo;', '“').replace('&rdquo;', '”')
+        text = text.replace('&lsquo;', '‘').replace('&rsquo;', '’')
+        text = text.replace('&hellip;', '…').replace('&mdash;', '—').replace('&ndash;', '–')
         return re.sub(r'\s+', ' ', text).strip()
     
     def clean_subject(self, text):
